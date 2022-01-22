@@ -1,13 +1,20 @@
+from itertools import count
 import sqlite3
 
 from flask import Flask, jsonify, json, render_template, request, url_for, redirect, flash
 from werkzeug.exceptions import abort
+
+# Variable defined to count connections
+
+connection_count=0
 
 # Function to get a database connection.
 # This function connects to database with the name `database.db`
 def get_db_connection():
     connection = sqlite3.connect('database.db')
     connection.row_factory = sqlite3.Row
+    global connection_count
+    connection_count=connection_count+1
     return connection
 
 # Function to get a post using its ID
@@ -16,6 +23,8 @@ def get_post(post_id):
     post = connection.execute('SELECT * FROM posts WHERE id = ?',
                         (post_id,)).fetchone()
     connection.close()
+    global connection_count
+    connection_count=connection_count+1
     return post
 
 # Define the Flask application
@@ -28,6 +37,8 @@ def index():
     connection = get_db_connection()
     posts = connection.execute('SELECT * FROM posts').fetchall()
     connection.close()
+    global connection_count
+    connection_count=connection_count+1
     return render_template('index.html', posts=posts)
 
 # Define how each individual article is rendered 
@@ -36,6 +47,8 @@ def index():
 def post(post_id):
     post = get_post(post_id)
     if post is None:
+        ## logger info
+      app.logger.info('Post not found')
       return render_template('404.html'), 404
     else:
       return render_template('post.html', post=post)
@@ -43,7 +56,41 @@ def post(post_id):
 # Define the About Us page
 @app.route('/about')
 def about():
+    ## logger info
+    app.logger.info('About Us page is retrieved')
     return render_template('about.html')
+
+
+@app.route('/healthz')
+def status():
+    response = app.response_class(
+            response=json.dumps({"result":"OK - healthy"}),
+            status=200,
+            mimetype='application/json'
+    )
+
+    ## logger info
+    app.logger.info('Status request successfull')
+
+    return response
+
+@app.route('/metrics')
+def metrics():
+    connection = get_db_connection()
+    cursor= connection.execute('SELECT count(*) FROM posts').fetchone()
+    for row in cursor:
+     print (row)
+    connection.close()
+    global connection_count
+    connection_count=connection_count+1
+    response = app.response_class(
+            response=json.dumps({"post_count":row,"Total DB connections":connection_count}),
+            status=200,
+            mimetype='application/json'
+    )
+    ## logger info
+    app.logger.info('Metrics request successfull')
+    return response
 
 # Define the post creation functionality 
 @app.route('/create', methods=('GET', 'POST'))
@@ -60,8 +107,11 @@ def create():
                          (title, content))
             connection.commit()
             connection.close()
-
+            global connection_count
+            connection_count=connection_count+1
             return redirect(url_for('index'))
+    ## logger info
+    app.logger.info('New title is posted:'+title)
 
     return render_template('create.html')
 
