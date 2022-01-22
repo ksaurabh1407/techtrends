@@ -1,4 +1,5 @@
 # This is a basic workflow to build and push techtrends docker image with github Actions
+# Changed the branch name to master
 
 name: Docker Build and Push
 
